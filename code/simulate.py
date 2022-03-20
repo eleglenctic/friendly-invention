@@ -8,7 +8,7 @@ def count_zeros(calldata: bytes):
     for i in range(total):
         if calldata[i] == 0:
             num += 1
-    return num, total - num, total
+    return (num, total - num, total)
 
 def compute_l1_cost(n_zeros, n_nonzeros):
     return (4 * n_zeros) + (16 * n_nonzeros)
@@ -24,7 +24,7 @@ def analyze_calldata(calldata_tuple: bytes, compressed: bool=False):
         )
         compression_ratio = size / compressed_size
         cost_ratio = cost / compressed_cost
-        result = (fname, {
+        return (fname, {
             "compressed_n_zeros": compressed_n_zeros,
             "compressed_size": compressed_size,
             "compressed_cost": compressed_cost,
@@ -36,9 +36,8 @@ def analyze_calldata(calldata_tuple: bytes, compressed: bool=False):
             "space_saving": 1 - 1 / compression_ratio,
             "gas_saving": 1 - 1 / cost_ratio
         })
-        return result
     else:
-        return n_zeros, size, cost
+        return (n_zeros, size, cost)
 
 if __name__ == "__main__":
     import os
@@ -74,7 +73,6 @@ if __name__ == "__main__":
     print(f"Preparing batch data using {n} processes")
     with Pool(n) as p:
         calldatas = p.map(prepare_batch, batch_files)
-
     for calldata in calldatas[::-1]:
         if calldata is None:
             calldatas.pop(calldatas.index(calldata))
@@ -92,5 +90,4 @@ if __name__ == "__main__":
         json.dump(results, f, indent=2)
 
     elapsed = time.perf_counter() - start
-    print(f"Total time to simulate: {elapsed} seconds")
-    print(f"Total time to simulate: {elapsed/60.0} minutes")
+    print(f"Total time to simulate: {elapsed:.2f} seconds or {elapsed/60.0:.2f} minutes")

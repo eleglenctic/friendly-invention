@@ -10,63 +10,79 @@ from dotenv import (
     find_dotenv
 )
 
-
 ################################################################################
 # os
 ################################################################################
-def get_env(key):
+def get_env(key: str, raise_on_none: bool=False) -> str:
     load_dotenv(find_dotenv())
     value = os.environ.get(key)
-    if not value:
-        raise Exception(f"set environment variable {key} or add it to .env file")
+    if value is None:
+        if raise_on_none:
+            raise Exception(f"export environment variable {key} or add it to .env file")
+        return ""
     return value
 
 ################################################################################
 # compression
 ################################################################################
-def compress_json(data):
+def compress_json(json_data: dict) -> bytes:
     return brotli.compress(json.dumps(data).encode("utf-8"))
 
-def decompress_json(compressed_data):
+def decompress_json(compressed_data: bytes) -> dict:
     return json.loads(brotli.decompress(compressed_data))
 
 ################################################################################
 # ethereum
 ################################################################################
-def event_topic(event_signature):
+def keccak256(data: bytes) -> bytes:
     hasher = keccak.new(digest_bits=256)
-    hasher.update(event_signature.encode("utf-8"))
-    return "0x" + hasher.hexdigest()
+    hasher.update(data)
+    return hasher.digest()
 
-def function_selector(function_signature):
-    return event_topic(function_signature)[0:10]
+def log_topic(event_sig: str) -> str:
+    return "0x" + keccak256(event_sig.encode("utf-8")).hex()
+
+def fn_selector(fn_sig: str) -> str:
+    return "0x" + keccak256(fn_sig.encode("utf-8"))[0:4].hex()
 
 def decode_fn(calldata, arg_types, arg_fields):
-    decoded_tuple = eth_abi.decode_abi(arg_types, codecs.decode(calldata, "hex_codec"))
-    decoded = {}
+    decoded_tuple = eth_abi.decode_abi(
+        arg_types, codecs.decode(calldata, "hex_codec")
+    )
+    decoded_dict = {}
     for f, field in enumerate(arg_fields):
-        decoded[field] = decoded_tuple[f]
-    return decoded
+        decoded_dict[field] = decoded_tuple[f]
+    return decoded_dict
 
-def eth_request(url_provider, method, params):
-    return requests.post(url_provider, json={
+def eth_request(provider_url, method, params):
+    return requests.post(provider_url, json={
         "id": 0,
         "jsonrpc": "2.0",
         "method": method,
         "params": params
     }).json()
 
-def get_logs(url_provider, from_block, to_block, topic):
+def get_logs(provider_url, from_block, to_block, topic):
     params = [{
         "fromBlock": hex(from_block),
         "toBlock": hex(to_block),
         "topics": [topic]
     }]
-    return eth_request(url_provider, "eth_getLogs", params)
+    return eth_request(provider_url, "eth_getLogs", params)
 
-def get_transaction_by_hash(url_provider, transaction_hash):
+def get_transaction_by_hash(provider_url, transaction_hash):
     params = [transaction_hash]
-    return eth_request(url_provider, "eth_getTransactionByHash", params)
+    return eth_request(provider_url, "eth_getTransactionByHash", params)
+
+class Provider:
+    def __init__(self, provider_url):
+        self.provider_url = provider_url
+
+    def get_logs(self, from_block, to_block, topic):
+        return get_logs(self.provider_url, from_block, to_block, topic)
+
+    def get_transaction_by_hash(self, transaction_hash):
+        return get_transaction_by_hash(self.provider_url, transaction_hash)
 
 ################################################################################
 # sequencer
@@ -86,7 +102,7 @@ arg_fields = [
     ["transactions", "lengths", "sectionsMetadata", "afterAcc"],
 ]
 
-decoders = { f"{function_selector(signatures[i])}": lambda calldata: decode_fn(calldata, arg_types[i], arg_fields[i]) for i in range(len(signatures)) }
+decoders = { f"{fn_selector(signatures[i])}": lambda calldata: decode_fn(calldata, arg_types[i], arg_fields[i]) for i in range(len(signatures)) }
 
 def decode_by_function_selector(calldata):
     selector = calldata[0:10]
