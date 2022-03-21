@@ -45,16 +45,13 @@ def log_topic(event_sig: str) -> str:
 def fn_selector(fn_sig: str) -> str:
     return "0x" + keccak256(fn_sig.encode("utf-8"))[0:4].hex()
 
-def decode_fn(calldata, arg_types, arg_fields):
+def decode_fn(calldata: str, arg_types: list, arg_fields: list):
     decoded_tuple = eth_abi.decode_abi(
         arg_types, codecs.decode(calldata, "hex_codec")
     )
-    decoded_dict = {}
-    for f, field in enumerate(arg_fields):
-        decoded_dict[field] = decoded_tuple[f]
-    return decoded_dict
+    return { field:decoded_tuple(f) for (f, field) in enumerate(arg_fields) }
 
-def eth_request(provider_url, method, params):
+def eth_request(provider_url: str, method: str, params: list):
     return requests.post(provider_url, json={
         "id": 0,
         "jsonrpc": "2.0",
@@ -62,7 +59,7 @@ def eth_request(provider_url, method, params):
         "params": params
     }).json()
 
-def get_logs(provider_url, from_block, to_block, topic):
+def get_logs(provider_url: str, from_block: int, to_block: int, topic: str):
     params = [{
         "fromBlock": hex(from_block),
         "toBlock": hex(to_block),
@@ -70,18 +67,18 @@ def get_logs(provider_url, from_block, to_block, topic):
     }]
     return eth_request(provider_url, "eth_getLogs", params)
 
-def get_transaction_by_hash(provider_url, transaction_hash):
+def get_transaction_by_hash(provider_url: str, transaction_hash: str):
     params = [transaction_hash]
     return eth_request(provider_url, "eth_getTransactionByHash", params)
 
 class Provider:
-    def __init__(self, provider_url):
+    def __init__(self, provider_url: str):
         self.provider_url = provider_url
 
-    def get_logs(self, from_block, to_block, topic):
+    def get_logs(self, from_block: int, to_block: int, topic: str):
         return get_logs(self.provider_url, from_block, to_block, topic)
 
-    def get_transaction_by_hash(self, transaction_hash):
+    def get_transaction_by_hash(self, transaction_hash: str):
         return get_transaction_by_hash(self.provider_url, transaction_hash)
 
 ################################################################################
@@ -104,7 +101,7 @@ arg_fields = [
 
 decoders = { f"{fn_selector(signatures[i])}": lambda calldata: decode_fn(calldata, arg_types[i], arg_fields[i]) for i in range(len(signatures)) }
 
-def decode_by_function_selector(calldata):
+def decode_by_function_selector(calldata: str):
     selector = calldata[0:10]
     if decoders.get(selector) is None:
         raise Exception(f"Unrecognized function selector: {selector}")
